@@ -1,0 +1,258 @@
+[
+    {
+        "id": "e6a2b8.d75a1d",
+        "type": "tab",
+        "label": "AIoT Dashboard",
+        "disabled": false,
+        "info": "Dashboard for AIoT Strategy Fatigue Detection System"
+    },
+    {
+        "id": "ui_group_metrics",
+        "type": "ui_group",
+        "name": "Live Telemetry",
+        "tab": "ui_tab_main",
+        "order": 1,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "ui_group_ai",
+        "type": "ui_group",
+        "name": "AI Engine Output",
+        "tab": "ui_tab_main",
+        "order": 2,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "ui_tab_main",
+        "type": "ui_tab",
+        "name": "Pro Terminal Monitor",
+        "icon": "dashboard",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "inject_1s",
+        "type": "inject",
+        "z": "e6a2b8.d75a1d",
+        "name": "Poll 1s",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 140,
+        "wires": [
+            [
+                "http_get_metrics"
+            ]
+        ]
+    },
+    {
+        "id": "http_get_metrics",
+        "type": "http request",
+        "z": "e6a2b8.d75a1d",
+        "name": "GET /api/metrics",
+        "method": "GET",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://127.0.0.1:5000/api/metrics",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "authType": "",
+        "x": 330,
+        "y": 140,
+        "wires": [
+            [
+                "func_parse"
+            ]
+        ]
+    },
+    {
+        "id": "func_parse",
+        "type": "function",
+        "z": "e6a2b8.d75a1d",
+        "name": "Parse Metrics",
+        "func": "if(msg.payload && msg.payload.success) {\n    var cpu = {payload: msg.payload.sensors.cpu_load};\n    var latency = {payload: msg.payload.sensors.latency_ms};\n    var score = {payload: msg.payload.metrics.fatigue || 0};\n    var decision = {payload: msg.payload.metrics.decision || 'AWAITING'};\n    var explain = {payload: msg.payload.metrics.explanation || 'Waiting for data'};\n    return [cpu, latency, score, decision, explain];\n}\nreturn [null,null,null,null,null];",
+        "outputs": 5,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 530,
+        "y": 140,
+        "wires": [
+            [
+                "ui_gauge_cpu"
+            ],
+            [
+                "ui_chart_latency"
+            ],
+            [
+                "ui_gauge_fatigue"
+            ],
+            [
+                "ui_text_decision"
+            ],
+            [
+                "ui_text_explain"
+            ]
+        ]
+    },
+    {
+        "id": "ui_gauge_cpu",
+        "type": "ui_gauge",
+        "z": "e6a2b8.d75a1d",
+        "name": "CPU Load",
+        "group": "ui_group_metrics",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "gtype": "gage",
+        "title": "Bot CPU (%)",
+        "label": "%",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 100,
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "50",
+        "seg2": "80",
+        "diff": false,
+        "className": "",
+        "x": 750,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "ui_chart_latency",
+        "type": "ui_chart",
+        "z": "e6a2b8.d75a1d",
+        "name": "API Latency",
+        "group": "ui_group_metrics",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "label": "Network Latency (ms)",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "",
+        "dot": false,
+        "ymin": "0",
+        "ymax": "200",
+        "removeOlder": 1,
+        "removeOlderPoints": "",
+        "removeOlderUnit": "60",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1f77b4",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 750,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ui_gauge_fatigue",
+        "type": "ui_gauge",
+        "z": "e6a2b8.d75a1d",
+        "name": "Fatigue Score",
+        "group": "ui_group_ai",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "gtype": "donut",
+        "title": "Fatigue Score",
+        "label": "AI Score",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 100,
+        "colors": [
+            "#089981",
+            "#f59e0b",
+            "#f23645"
+        ],
+        "seg1": "30",
+        "seg2": "75",
+        "diff": false,
+        "className": "",
+        "x": 750,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "ui_text_decision",
+        "type": "ui_text",
+        "z": "e6a2b8.d75a1d",
+        "group": "ui_group_ai",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "name": "AI Decision",
+        "label": "LSTM Decision:",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#ffffff",
+        "x": 750,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "ui_text_explain",
+        "type": "ui_text",
+        "z": "e6a2b8.d75a1d",
+        "group": "ui_group_ai",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "name": "Explanation",
+        "label": "Factors:",
+        "format": "{{msg.payload}}",
+        "layout": "col-center",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 14,
+        "color": "#aaaaaa",
+        "x": 750,
+        "y": 220,
+        "wires": []
+    }
+]

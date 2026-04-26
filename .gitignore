@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Database
+*.db
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models (large binary files — regenerate with train_dummy_models.py)
+models/*.h5
+models/*.pkl
+models/*.joblib
+
+# Node-RED node_modules
+.nodered/node_modules/
+node_modules/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.*

@@ -1,0 +1,13 @@
+flask
+flask-socketio
+eventlet
+pandas
+numpy
+yfinance
+yahooquery
+ta
+scikit-learn
+requests
+werkzeug
+finnhub-python
+psutil

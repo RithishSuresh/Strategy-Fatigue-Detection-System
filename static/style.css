@@ -1,0 +1,94 @@
+/* Pro Terminal CSS */
+:root {
+    --bg-dark: #0a0e17;
+    --bg-panel: #131722;
+    --up-color: #089981;
+    --down-color: #f23645;
+}
+
+body {
+    background-color: var(--bg-dark);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #2a2e39;
+    border-radius: 4px;
+}
+
+/* Ticker Animation */
+@keyframes ticker {
+    0% { transform: translateX(100vw); }
+    100% { transform: translateX(-100%); }
+}
+.ticker-content {
+    animation: ticker 40s linear infinite;
+}
+
+/* Price Flashes */
+@keyframes flashGreen {
+    0% { background-color: rgba(8, 153, 129, 0.5); }
+    100% { background-color: transparent; }
+}
+@keyframes flashRed {
+    0% { background-color: rgba(242, 54, 69, 0.5); }
+    100% { background-color: transparent; }
+}
+.flash-up {
+    color: var(--up-color) !important;
+    animation: flashGreen 0.5s ease-out;
+}
+.flash-down {
+    color: var(--down-color) !important;
+    animation: flashRed 0.5s ease-out;
+}
+
+/* Button click effect */
+.flash-btn:active {
+    transform: scale(0.98);
+}
+
+/* Toasts */
+.toast {
+    animation: fadeUp 0.3s ease-out forwards;
+}
+@keyframes fadeUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* Landing Page Specific Styles */
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); }
+    100% { transform: translateY(0px); }
+}
+.animate-float {
+    animation: float 6s ease-in-out infinite;
+}
+
+.terminal-glow-wrapper {
+    position: relative;
+}
+.terminal-glow-wrapper::before {
+    content: '';
+    position: absolute;
+    top: -2px; left: -2px; right: -2px; bottom: -2px;
+    background: linear-gradient(45deg, #ff00a0, #7a00ff, #00f0ff, #ff00a0);
+    z-index: -1;
+    border-radius: 12px;
+    background-size: 400%;
+    animation: glowing 20s linear infinite;
+    opacity: 0.8;
+}
+
+@keyframes glowing {
+    0% { background-position: 0 0; }
+    50% { background-position: 400% 0; }
+    100% { background-position: 0 0; }
+}

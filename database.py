@@ -1,45 +1,29 @@
-"""
-database.py - Auto-creates and manages all SQLite tables.
-"""
-import sqlite3
-import logging
-from werkzeug.security import generate_password_hash
-
-DB_NAME = "database.db"
+"""database.py — SQLite schema + helpers"""
+import sqlite3, logging
 logger = logging.getLogger(__name__)
+DB_PATH = 'database.db'
 
 def get_db():
-    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    """Create all required tables and seed default admin user."""
     conn = get_db()
-    c = conn.cursor()
-
-    c.execute("""
+    conn.executescript('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             balance REAL DEFAULT 100000.0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS portfolio (
+        );
+        CREATE TABLE IF NOT EXISTS watchlist (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             symbol TEXT NOT NULL,
-            qty REAL DEFAULT 0,
-            avg_price REAL DEFAULT 0,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
-
-    c.execute("""
+            UNIQUE(user_id, symbol)
+        );
         CREATE TABLE IF NOT EXISTS trades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -48,54 +32,39 @@ def init_db():
             qty REAL NOT NULL,
             price REAL NOT NULL,
             total REAL NOT NULL,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS watchlist (
+            strategy TEXT DEFAULT 'MANUAL',
+            pnl REAL DEFAULT 0,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS portfolio (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             symbol TEXT NOT NULL,
-            UNIQUE(user_id, symbol),
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
-
-    c.execute("""
+            qty REAL DEFAULT 0,
+            avg_price REAL DEFAULT 0,
+            UNIQUE(user_id, symbol)
+        );
+        CREATE TABLE IF NOT EXISTS strategies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            rules TEXT NOT NULL,
+            capital REAL DEFAULT 10000,
+            stop_loss REAL DEFAULT 2.0,
+            take_profit REAL DEFAULT 5.0,
+            is_active INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS alerts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            symbol TEXT NOT NULL,
+            user_id INTEGER,
+            symbol TEXT,
             message TEXT NOT NULL,
-            level TEXT DEFAULT 'info',
+            alert_type TEXT DEFAULT 'info',
             is_read INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    """)
-
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event TEXT NOT NULL,
-            details TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # Seed default admin
-    c.execute("SELECT id FROM users WHERE username='admin'")
-    if not c.fetchone():
-        c.execute(
-            "INSERT INTO users (username, password, balance) VALUES (?, ?, ?)",
-            ('admin', generate_password_hash('admin123'), 100000.0)
-        )
-        # Default watchlist for admin
-        c.execute("INSERT INTO users (username, password, balance) VALUES (?, ?, ?)",
-                  ('demo', generate_password_hash('demo123'), 100000.0))
-
+        );
+    ''')
     conn.commit()
     conn.close()
     logger.info("Database initialised successfully.")

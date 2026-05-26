@@ -3,318 +3,454 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pro Terminal | AIoT Trading</title>
+<title>Premium AIoT Terminal</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script>tailwind.config={darkMode:'class',theme:{extend:{colors:{dark:'#000000',panel:'rgba(19, 23, 34, 0.7)',border:'rgba(255,255,255,0.08)',primary:'#2962ff',accent:'#089981',danger:'#f23645',warn:'#f59e0b'},backgroundImage:{'space':"url('/static/img/hero_bg.png')"}}}}</script>
+<script>
+tailwind.config={
+    darkMode:'class',
+    theme:{
+        extend:{
+            colors:{
+                dark:'#06090e',
+                panel:'rgba(16, 22, 35, 0.65)',
+                border:'rgba(255,255,255,0.08)',
+                primary:'#2962ff',
+                accent:'#089981',
+                danger:'#f23645',
+                warn:'#f59e0b'
+            },
+            fontFamily:{
+                inter:['Inter','sans-serif'],
+                mono:['JetBrains Mono','monospace']
+            }
+        }
+    }
+}
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-  *{font-family:'Inter',sans-serif;box-sizing:border-box}
-  body{
+  body {
       background-color: #000;
-      background-image: linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.9)), url('/static/img/hero_bg.png');
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-      color:#e2e8f0;
-      height:100vh;
-      overflow:hidden;
-      display:flex;
-      flex-direction:column;
-  }
-  .app-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
+      background-image: radial-gradient(circle at top right, rgba(41,98,255,0.1), transparent 40%),
+                        radial-gradient(circle at bottom left, rgba(124,58,237,0.1), transparent 40%);
+      color: #e2e8f0;
+      height: 100vh;
       overflow: hidden;
-      position: relative;
-      background: rgba(10, 14, 23, 0.85);
+      font-family: 'Inter', sans-serif;
+  }
+  .glass-panel {
+      background: var(--bg-panel, rgba(16, 22, 35, 0.65));
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+  }
+  .glass-header {
+      background: rgba(6, 9, 14, 0.8);
       backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
   }
-  .app-glow-wrapper {
-      position: absolute;
-      inset: -2px;
-      background: linear-gradient(45deg, #ff00a0, #7a00ff, #00f0ff, #ff00a0);
-      z-index: -1;
-      border-radius: 18px;
-      background-size: 400%;
-      animation: glowing 20s linear infinite;
-      opacity: 0.6;
-      pointer-events: none;
+  
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+  @keyframes flash-up { 0% { background: rgba(8,153,129,.3); } 100% { background: transparent; } }
+  @keyframes flash-down { 0% { background: rgba(242,54,69,.3); } 100% { background: transparent; } }
+  .flash-up { animation: flash-up .8s ease-out; }
+  .flash-down { animation: flash-down .8s ease-out; }
+  
+  @keyframes pulse-dot { 0%,100% { opacity:.4; transform:scale(1); } 50% { opacity:1; transform:scale(1.2); } }
+  .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+  
+  .sidebar-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; border-radius: 12px;
+      cursor: pointer; transition: all .2s ease;
+      font-size: 13px; font-weight: 500; color: #94a3b8;
+      margin-bottom: 6px; border: 1px solid transparent;
   }
-  @keyframes glowing { 0% { background-position: 0 0; } 50% { background-position: 400% 0; } 100% { background-position: 0 0; } }
-  .mono{font-family:'JetBrains Mono',monospace}
-  ::-webkit-scrollbar{width:4px;height:4px}
-  ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:2px}
-  .panel{background:var(--bg-panel);border:1px solid rgba(255,255,255,0.05)}
-  @keyframes flash-up{0%{background:rgba(8,153,129,.35)}100%{background:transparent}}
-  @keyframes flash-down{0%{background:rgba(242,54,69,.35)}100%{background:transparent}}
-  .flash-up{animation:flash-up .6s ease}
-  .flash-down{animation:flash-down .6s ease}
-  @keyframes pulse-dot{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
-  .pulse-dot{animation:pulse-dot 1.5s ease-in-out infinite}
-  .sidebar-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:13px;color:#94a3b8;margin-bottom:4px}
-  .sidebar-item:hover,.sidebar-item.active{background:rgba(255,255,255,0.1);color:#fff;box-shadow: inset 2px 0 0 #2962ff}
-  .fatigue-bar{height:8px;border-radius:4px;background:rgba(255,255,255,0.1);overflow:hidden}
-  .fatigue-fill{height:100%;border-radius:4px;transition:width .5s ease}
-  .tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-  .watchlist-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background .15s}
-  .watchlist-row:hover{background:rgba(255,255,255,.08)}
-  input[list]{cursor:pointer}
-  #mainChart{width:100%;height:100%}
-  .sensor-bar{height:6px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden}
-  .sensor-fill{height:100%;border-radius:3px;transition:width .5s}
-  .glass-header { background: rgba(0,0,0,0.3); backdrop-filter: blur(10px); }
+  .sidebar-item:hover {
+      background: rgba(255,255,255,0.05); color: #fff;
+  }
+  .sidebar-item.active {
+      background: linear-gradient(90deg, rgba(41,98,255,0.15) 0%, transparent 100%);
+      color: #fff; border-left: 3px solid #2962ff;
+  }
 </style>
 </head>
-<body>
-
-<div class="app-glow-wrapper"></div>
-<div class="app-container">
+<body class="flex flex-col">
 
 <!-- TOP NAV -->
-<header class="glass-header border-b border-border shrink-0 h-14 flex items-center justify-between px-6 z-50">
-  <div class="flex items-center gap-3">
-    <a href="/" class="flex items-center gap-2">
-      <div class="w-7 h-7 bg-primary rounded-lg flex items-center justify-center">
-        <svg class="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M3 13l4-8 4 6 3-4 4 10H3z"/></svg>
+<header class="glass-header border-b border-border h-16 shrink-0 flex items-center justify-between px-6 z-50">
+  <div class="flex items-center gap-4">
+    <a href="/" class="flex items-center gap-3 mr-6 hover:opacity-80 transition-opacity">
+      <div class="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M3 13l4-8 4 6 3-4 4 10H3z"/></svg>
       </div>
-      <span class="font-bold text-sm">AIoT<span class="text-primary">Terminal</span></span>
+      <span class="font-bold text-base tracking-tight">AIoT<span class="text-primary">Terminal</span></span>
     </a>
-    <!-- Search -->
-    <div class="relative ml-4">
-      <input type="text" id="symbolSearch" list="stockList" placeholder="Search symbol..." autocomplete="off"
-        class="bg-dark border border-border rounded-lg px-3 py-1.5 text-sm text-white w-52 focus:outline-none focus:border-primary uppercase placeholder:normal-case placeholder:text-gray-600">
-      <datalist id="stockList">
-        <option value="AAPL">Apple</option><option value="TSLA">Tesla</option><option value="MSFT">Microsoft</option>
-        <option value="NVDA">NVIDIA</option><option value="AMD">AMD</option><option value="META">Meta</option>
-        <option value="NFLX">Netflix</option><option value="AMZN">Amazon</option><option value="GOOGL">Google</option>
-        <option value="BTC-USD">Bitcoin</option><option value="ETH-USD">Ethereum</option><option value="SOL-USD">Solana</option>
-        <option value="RELIANCE.NS">Reliance</option><option value="TCS.NS">TCS</option><option value="INFY.NS">Infosys</option>
-        <option value="SBIN.NS">SBI</option><option value="HDFCBANK.NS">HDFC Bank</option>
-        <option value="^GSPC">S&P 500</option><option value="^IXIC">Nasdaq</option><option value="^NSEI">Nifty 50</option>
-      </datalist>
+    
+    <!-- Unified Search -->
+    <div class="relative z-[100]">
+      <div class="flex items-center bg-white/5 border border-white/10 rounded-xl px-4 py-2 w-72 focus-within:bg-white/10 focus-within:border-primary/50 transition-all shadow-inner">
+        <svg class="w-4 h-4 text-gray-400 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" id="symbolSearch" placeholder="Search Stocks, Crypto, Forex..." autocomplete="off"
+          class="bg-transparent text-sm text-white w-full focus:outline-none placeholder:text-gray-500">
+      </div>
+      <div id="searchDropdown" class="absolute top-full left-0 mt-2 w-full glass-panel border border-border shadow-2xl hidden overflow-hidden max-h-80 overflow-y-auto"></div>
     </div>
   </div>
-  <div class="flex items-center gap-4">
-    <div class="flex items-center gap-1.5 text-xs">
+  
+  <div class="flex items-center gap-6">
+    <div class="flex items-center gap-2 bg-white/5 rounded-full px-3 py-1 border border-white/5">
       <div id="connDot" class="w-2 h-2 rounded-full bg-red-500 pulse-dot"></div>
-      <span id="connText" class="text-gray-400">Connecting</span>
+      <span id="connText" class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Connecting</span>
     </div>
-    <div class="text-xs text-gray-400 mono" id="liveTime"></div>
-    <div class="flex items-center gap-2 text-sm">
-      <div class="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold">{{ user.username[0]|upper }}</div>
-      <span class="text-gray-300 hidden md:block">{{ user.username }}</span>
+    <div class="text-xs text-primary font-mono bg-primary/10 px-3 py-1 rounded-lg border border-primary/20" id="liveTime">00:00:00</div>
+    <div class="h-6 w-px bg-white/10"></div>
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center text-white text-sm font-bold shadow-inner border border-white/10">
+        {{ user.username[0]|upper }}
+      </div>
+      <div class="flex flex-col">
+        <span class="text-sm font-semibold text-white leading-none">{{ user.username }}</span>
+        <a href="/logout" class="text-[10px] text-gray-500 hover:text-red-400 mt-1 transition-colors">Sign Out</a>
+      </div>
     </div>
-    <a href="/logout" class="text-xs text-gray-500 hover:text-red-400 transition-colors">Logout</a>
   </div>
 </header>
 
-<!-- MAIN LAYOUT -->
+<!-- MAIN WORKSPACE -->
 <div class="flex flex-1 overflow-hidden">
 
   <!-- LEFT SIDEBAR -->
-  <aside class="w-52 panel border-r border-border flex flex-col shrink-0 overflow-y-auto">
-    <!-- Balance Card -->
-    <div class="p-3 border-b border-border">
-      <div class="text-xs text-gray-500 mb-0.5">Virtual Balance</div>
-      <div class="text-lg font-bold text-white mono" id="balanceDisplay">₹{{ '{:,.2f}'.format(user.balance) }}</div>
-      <div class="text-xs text-gray-500" id="totalValue">Loading portfolio...</div>
+  <aside class="w-64 glass-header border-r border-border flex flex-col shrink-0">
+    <!-- Balance -->
+    <div class="p-6 border-b border-border">
+      <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1">Portfolio Value</div>
+      <div class="text-2xl font-black text-white font-mono tracking-tight" id="balanceDisplay">₹{{ '{:,.2f}'.format(user.balance) }}</div>
+      <div class="text-xs text-primary mt-1 font-medium" id="totalValue">Loading...</div>
     </div>
 
-    <!-- Nav -->
-    <nav class="p-2 border-b border-border space-y-0.5">
-      <div class="sidebar-item active" onclick="showPanel('chart')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
-        Chart
+    <!-- Navigation -->
+    <nav class="p-3 border-b border-border space-y-1">
+      <div class="sidebar-item active" id="nav-chart" onclick="showPanel('chart')">
+        <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+        Live Terminal
       </div>
-      <div class="sidebar-item" onclick="showPanel('ai')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.546A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.545z"/></svg>
-        AI Analysis
+      <div class="sidebar-item" id="nav-ai" onclick="showPanel('ai')">
+        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.546A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.545z"/></svg>
+        AI Fatigue Engine
       </div>
-      <div class="sidebar-item" onclick="showPanel('portfolio')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-        Portfolio
+      <div class="sidebar-item" id="nav-strategies" onclick="showPanel('strategies')">
+        <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Strategy Monitor
       </div>
-      <div class="sidebar-item" onclick="showPanel('iot')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
-        IoT Sensors
+      <div class="sidebar-item" id="nav-portfolio" onclick="showPanel('portfolio')">
+        <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+        Paper Trading
+      </div>
+      <div class="sidebar-item" id="nav-iot" onclick="showPanel('iot')">
+        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Fatigue Diagnostics
       </div>
     </nav>
 
     <!-- Watchlist -->
-    <div class="p-2 flex-1 overflow-y-auto">
-      <div class="flex items-center justify-between mb-2 px-1">
-        <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Watchlist</span>
-        <button onclick="addToWatchlist()" class="text-primary text-xs hover:underline">+ Add</button>
+    <div class="flex-1 overflow-y-auto p-4">
+      <div class="flex items-center justify-between mb-4">
+        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Watchlist</span>
+        <button onclick="addToWatchlist()" class="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-1 rounded transition-colors">+ ADD</button>
       </div>
-      <div id="watchlistEl" class="space-y-0.5">
+      <div id="watchlistEl">
         {% for sym in watchlist %}
-        <div class="watchlist-row" onclick="switchSymbol('{{sym}}')">
-          <span class="text-xs font-semibold text-white">{{sym}}</span>
-          <span class="text-xs text-gray-500 mono" id="wl-{{sym}}">—</span>
+        <div class="flex items-center justify-between p-2.5 rounded-lg hover:bg-white/10 cursor-pointer group transition-colors mb-1" id="wl-row-{{sym}}">
+          <div class="flex-1 font-semibold text-white text-[13px]" onclick="switchSymbol('{{sym}}')">{{sym}}</div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400 mono font-medium" id="wl-{{sym}}">—</span>
+            <button onclick="removeFromWatchlist('{{sym}}', event)" class="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-danger p-1 transition-opacity">✕</button>
+          </div>
         </div>
         {% endfor %}
       </div>
     </div>
   </aside>
 
-  <!-- MAIN CONTENT -->
-  <main class="flex-1 overflow-hidden flex flex-col">
-
-    <!-- PRICE HEADER BAR -->
-    <div class="panel border-b border-border shrink-0 px-4 py-2 flex items-center gap-6">
-      <div>
-        <div class="text-xs text-gray-500 uppercase tracking-wider" id="activeSymbol">BTC-USD</div>
-        <div class="flex items-baseline gap-2">
-          <span class="text-2xl font-black mono text-white" id="activePrice">—</span>
-          <span class="text-sm font-medium" id="priceChange">—</span>
+  <!-- CENTER PANELS -->
+  <main class="flex-1 overflow-hidden relative bg-[#0a0e17]">
+    
+    <!-- 1. LIVE CHART PANEL -->
+    <div id="panel-chart" class="absolute inset-0 flex flex-col z-10 bg-inherit">
+      <!-- Top Info Bar -->
+      <div class="h-16 border-b border-border flex items-center justify-between px-6 shrink-0 bg-white/5">
+        <div class="flex items-center gap-6">
+          <div>
+            <h2 class="text-xl font-black text-white tracking-tight" id="activeSymbol">BTC-USD</h2>
+            <div class="text-[11px] text-gray-400 font-medium">Live Market Data</div>
+          </div>
+          <div class="h-8 w-px bg-white/10"></div>
+          <div>
+            <div class="text-2xl font-mono font-bold tracking-tight rounded px-2 -mx-2 transition-colors" id="activePrice">—</div>
+          </div>
+          <div>
+            <div class="text-sm font-medium text-gray-500" id="priceChange">—</div>
+          </div>
+        </div>
+        
+        <!-- Execution Panel -->
+        <div class="flex items-center gap-3 bg-dark/50 p-1.5 rounded-xl border border-white/5">
+          <div class="flex items-center px-3 gap-2">
+            <span class="text-xs text-gray-500 font-semibold">QTY</span>
+            <input type="number" id="tradeQty" value="1" min="0.001" step="0.001" class="w-16 bg-transparent text-white font-mono text-sm outline-none text-right border-b border-white/20 focus:border-primary transition-colors">
+          </div>
+          <button onclick="executeTrade('BUY')" class="bg-gradient-to-r from-accent to-[#067a67] hover:brightness-110 shadow-lg shadow-accent/20 text-white text-xs font-bold px-6 py-2.5 rounded-lg transition-all">
+            BUY
+          </button>
+          <button onclick="executeTrade('SELL')" class="bg-gradient-to-r from-danger to-[#c92a38] hover:brightness-110 shadow-lg shadow-danger/20 text-white text-xs font-bold px-6 py-2.5 rounded-lg transition-all">
+            SELL
+          </button>
         </div>
       </div>
-      <div class="hidden md:flex items-center gap-6 text-xs">
-        <div><div class="text-gray-500">RSI</div><div class="mono font-semibold" id="rsiVal">—</div></div>
-        <div><div class="text-gray-500">Decision</div><div class="font-bold" id="decisionVal">—</div></div>
-        <div><div class="text-gray-500">Fatigue</div><div class="mono font-semibold" id="fatigueVal">—</div></div>
-        <div><div class="text-gray-500">Drawdown</div><div class="mono font-semibold" id="ddVal">—</div></div>
-        <div><div class="text-gray-500">BB Width</div><div class="mono font-semibold" id="bbVal">—</div></div>
+      
+      <!-- AI Overview Ribbon -->
+      <div class="h-12 border-b border-border flex items-center px-6 gap-8 text-[11px] font-semibold tracking-wide shrink-0 bg-gradient-to-r from-primary/10 via-transparent to-transparent">
+        <div class="flex items-center gap-3 text-primary">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          AI FATIGUE ENGINE
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-gray-500 uppercase">Status:</span>
+          <span class="tag px-2.5 py-0.5 rounded border border-white/10" id="fatigueTag">WARMING UP</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-gray-500 uppercase">Action:</span>
+          <span id="decisionVal" class="text-white bg-white/10 px-2.5 py-0.5 rounded border border-white/10">—</span>
+        </div>
+        <div class="flex-1 flex items-center gap-3">
+          <span class="text-gray-500 uppercase">Fatigue Score:</span>
+          <div class="flex-1 h-2 bg-dark rounded-full overflow-hidden border border-white/5">
+            <div id="fatigueBar" class="h-full w-0 transition-all duration-700 ease-out bg-gray-500"></div>
+          </div>
+          <span id="fatigueScore" class="font-mono text-white text-sm">0.0</span>
+        </div>
       </div>
-      <!-- Trade Buttons -->
-      <div class="ml-auto flex items-center gap-2">
-        <input type="number" id="tradeQty" value="1" min="0.001" step="0.001" class="w-20 bg-dark border border-border rounded px-2 py-1 text-xs text-white mono">
-        <button onclick="executeTrade('BUY')" class="bg-accent hover:bg-green-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">BUY</button>
-        <button onclick="executeTrade('SELL')" class="bg-danger hover:bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">SELL</button>
+
+      <!-- TradingView Container -->
+      <div class="flex-1 relative bg-inherit">
+        <div class="tradingview-widget-container" style="height:100%;width:100%">
+          <div id="tradingview_chart" style="height:100%;width:100%"></div>
+        </div>
+        
+        <div id="chartOverlay" class="absolute inset-0 bg-[#0a0e17]/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center hidden">
+          <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_15px_rgba(41,98,255,0.5)]"></div>
+          <div class="text-sm font-semibold text-white tracking-wider" id="overlayMsg">Loading Market Data...</div>
+        </div>
       </div>
     </div>
 
-    <!-- PANEL CONTAINER -->
-    <div class="flex-1 overflow-hidden relative">
+    <!-- 2. AI FATIGUE ENGINE PANEL -->
+    <div id="panel-ai" class="absolute inset-0 p-6 overflow-y-auto hidden z-20 bg-[#0a0e17]">
+      <div class="max-w-5xl mx-auto">
+        <div class="flex items-end justify-between mb-8">
+          <div>
+            <h1 class="text-3xl font-black text-white tracking-tight mb-2">AI Fatigue Analysis</h1>
+            <p class="text-gray-400 text-sm">Deep-learning anomaly detection combined with multi-factor strategy scoring.</p>
+          </div>
+          <div class="text-right">
+            <div class="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">System Confidence</div>
+            <div class="text-2xl font-mono font-bold text-accent" id="ai-confidence">--%</div>
+          </div>
+        </div>
 
-      <!-- CHART PANEL -->
-      <div id="panel-chart" class="absolute inset-0 flex flex-col">
-        <div class="flex-1 relative">
-          <div id="mainChart" class="absolute inset-0"></div>
-          <div id="chartOverlay" class="absolute inset-0 flex items-center justify-center bg-panel/80">
-            <div class="text-center">
-              <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-              <div class="text-sm text-gray-400" id="overlayMsg">Loading live market data...</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <!-- Main Gauge -->
+          <div class="glass-panel p-6 flex flex-col items-center justify-center relative overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent"></div>
+            <div class="relative w-48 h-48 mb-4">
+              <svg viewBox="0 0 100 50" class="w-full h-full overflow-visible">
+                <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8" stroke-linecap="round" />
+                <path id="ai-gauge-path" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#089981" stroke-width="8" stroke-dasharray="125.6" stroke-dashoffset="125.6" stroke-linecap="round" style="transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1), stroke 1s ease;" />
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-end pb-4">
+                <span class="text-5xl font-black font-mono tracking-tighter" id="ai-score">0</span>
+              </div>
+            </div>
+            <span class="text-sm font-bold text-white px-4 py-1.5 rounded-full border border-white/10 bg-white/5" id="ai-status">WARMING UP</span>
+          </div>
+          
+          <!-- Explanations -->
+          <div class="md:col-span-2 glass-panel p-6 flex flex-col">
+            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-white/5 pb-2">AI Reasoning & Recommendation</h3>
+            <div class="text-sm text-white font-medium bg-primary/10 border border-primary/20 p-4 rounded-xl mb-4 leading-relaxed" id="fatigueExplain">
+              Awaiting data stream...
+            </div>
+            <div class="flex-1 bg-dark/50 rounded-xl p-4 border border-white/5 overflow-y-auto">
+              <div class="text-xs font-bold text-gray-500 uppercase mb-3">Detected Risk Factors</div>
+              <div id="ai-reasons" class="space-y-2 text-sm text-gray-300">
+                <div class="text-gray-600 italic">No anomalies detected yet.</div>
+              </div>
             </div>
           </div>
         </div>
-        <!-- Fatigue Bar -->
-        <div class="panel border-t border-border shrink-0 px-4 py-2 flex items-center gap-4">
-          <span class="text-xs text-gray-400">Fatigue</span>
-          <div class="fatigue-bar flex-1"><div class="fatigue-fill bg-accent" id="fatigueBar" style="width:0%"></div></div>
-          <span class="text-xs mono text-white" id="fatigueScore">0</span>
-          <span class="tag" id="fatigueTag" style="background:rgba(8,153,129,.2);color:#089981">HEALTHY</span>
-          <span class="text-xs text-gray-500 flex-1 text-right" id="fatigueExplain"></span>
+
+        <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 border-b border-white/5 pb-2">Underlying Metrics</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="glass-panel p-4 bg-gradient-to-br from-white/5 to-transparent"><div class="text-[11px] text-gray-500 uppercase font-bold mb-1">Isolation Forest Anomaly</div><div class="text-xl font-mono text-white font-bold" id="ai-iso">—</div></div>
+          <div class="glass-panel p-4"><div class="text-[11px] text-gray-500 uppercase font-bold mb-1">Live RSI</div><div class="text-xl font-mono text-white font-bold" id="ai-rsi">—</div></div>
+          <div class="glass-panel p-4"><div class="text-[11px] text-gray-500 uppercase font-bold mb-1">Current Drawdown</div><div class="text-xl font-mono text-danger font-bold" id="ai-dd">—</div></div>
+          <div class="glass-panel p-4"><div class="text-[11px] text-gray-500 uppercase font-bold mb-1">Market Volatility</div><div class="text-xl font-mono text-orange-400 font-bold" id="ai-vol">—</div></div>
         </div>
       </div>
+    </div>
 
-      <!-- AI PANEL -->
-      <div id="panel-ai" class="absolute inset-0 p-4 overflow-y-auto hidden">
-        <h2 class="text-base font-bold mb-4">🤖 AI Fatigue Engine</h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Autoencoder</div><div class="text-xl font-bold mono" id="ai-ae">—</div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Isolation Forest</div><div class="text-xl font-bold mono" id="ai-iso">—</div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">RSI Score</div><div class="text-xl font-bold mono" id="ai-rsi">—</div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Drawdown</div><div class="text-xl font-bold mono" id="ai-dd">—</div></div>
-        </div>
-        <div class="panel rounded-xl p-4 mb-4">
-          <div class="text-xs text-gray-400 mb-2">Fatigue Score — Combined (Autoencoder 35% + IsoForest 25% + Indicators 40%)</div>
-          <div class="fatigue-bar mb-2"><div class="fatigue-fill" id="ai-bar" style="width:0%"></div></div>
-          <div class="flex items-center justify-between">
-            <span class="text-2xl font-black mono" id="ai-score">0</span>
-            <span class="tag text-base px-4 py-1" id="ai-status">WARMING UP</span>
-          </div>
-          <div class="mt-2 text-sm text-gray-400" id="ai-explain">Waiting for data...</div>
-        </div>
-        <div class="panel rounded-xl p-4">
-          <div class="text-xs text-gray-400 mb-3">Score Legend</div>
-          <div class="space-y-2 text-sm">
-            <div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-accent"></div><span>0–30: HEALTHY — Strategy performing well. Safe to BUY.</span></div>
-            <div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-warn"></div><span>31–60: WARNING — Signs of weakening. Consider HOLD.</span></div>
-            <div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-orange-500"></div><span>61–80: FATIGUED — Strategy degrading. Reduce exposure.</span></div>
-            <div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-danger"></div><span>81–100: CRITICAL — Strategy failing. EXIT now.</span></div>
+    <!-- 3. STRATEGIES PANEL -->
+    <div id="panel-strategies" class="absolute inset-0 p-6 overflow-y-auto hidden z-20 bg-[#0a0e17]">
+      <div class="max-w-6xl mx-auto">
+        <h1 class="text-2xl font-black text-white tracking-tight mb-2">Strategy Monitor</h1>
+        <p class="text-gray-400 text-sm mb-6">Real-time performance tracking of standard algorithmic strategies against the current market.</p>
+        
+        <div id="strategyGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div class="glass-panel p-6 animate-pulse flex flex-col justify-center items-center h-48">
+            <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-3"></div>
+            <div class="text-sm text-gray-500">Evaluating Strategies...</div>
           </div>
         </div>
-      </div>
 
-      <!-- PORTFOLIO PANEL -->
-      <div id="panel-portfolio" class="absolute inset-0 p-4 overflow-y-auto hidden">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-base font-bold">💼 Portfolio</h2>
-          <button onclick="exportCSV()" class="text-xs text-primary hover:underline">Export CSV</button>
-        </div>
-        <div class="grid grid-cols-3 gap-3 mb-4">
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Cash Balance</div><div class="text-lg font-bold mono" id="p-balance">—</div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Holdings Value</div><div class="text-lg font-bold mono" id="p-holdings">—</div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Total P&L</div><div class="text-lg font-bold mono" id="p-pnl">—</div></div>
-        </div>
-        <div class="panel rounded-xl overflow-hidden mb-4">
-          <div class="px-4 py-2 border-b border-border text-xs font-semibold text-gray-400 uppercase">Holdings</div>
-          <div id="holdingsTable" class="divide-y divide-border"></div>
-        </div>
-        <div class="panel rounded-xl overflow-hidden">
-          <div class="px-4 py-2 border-b border-border text-xs font-semibold text-gray-400 uppercase">Recent Trades</div>
-          <div id="tradeHistory" class="divide-y divide-border"></div>
-        </div>
-      </div>
-
-      <!-- IOT PANEL -->
-      <div id="panel-iot" class="absolute inset-0 p-4 overflow-y-auto hidden">
-        <h2 class="text-base font-bold mb-4">📡 IoT Virtual Sensors</h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="sensorGrid">
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">CPU Usage</div><div class="text-xl font-bold mono" id="s-cpu">—%</div><div class="sensor-bar mt-2"><div class="sensor-fill bg-primary" id="sb-cpu" style="width:0%"></div></div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">RAM Usage</div><div class="text-xl font-bold mono" id="s-ram">—%</div><div class="sensor-bar mt-2"><div class="sensor-fill bg-accent" id="sb-ram" style="width:0%"></div></div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">API Latency</div><div class="text-xl font-bold mono" id="s-lat">—ms</div><div class="sensor-bar mt-2"><div class="sensor-fill bg-warn" id="sb-lat" style="width:0%"></div></div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Risk Pressure</div><div class="text-xl font-bold mono" id="s-risk">—%</div><div class="sensor-bar mt-2"><div class="sensor-fill bg-danger" id="sb-risk" style="width:0%"></div></div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Orders/Min</div><div class="text-xl font-bold mono" id="s-opm">—</div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Trade Freq</div><div class="text-xl font-bold mono" id="s-tf">—</div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Net Delay</div><div class="text-xl font-bold mono" id="s-nd">—ms</div></div>
-          <div class="panel rounded-xl p-4"><div class="text-xs text-gray-400 mb-1">Heartbeat</div><div class="text-xl font-bold text-accent" id="s-hb">OK ✓</div></div>
-        </div>
-        <!-- Node-RED iframe -->
-        <div class="panel rounded-xl overflow-hidden">
-          <div class="px-4 py-2 border-b border-border text-xs font-semibold text-gray-400 uppercase flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-orange-400"></div>
-            Node-RED IoT Dashboard
+        <div class="glass-panel p-6 bg-gradient-to-r from-primary/10 to-transparent border-primary/20">
+          <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+            Custom Strategy Sandbox
+          </h2>
+          <div class="flex flex-wrap gap-4 items-end mb-6">
+            <div class="flex-1 min-w-[120px]">
+              <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Asset</label>
+              <input type="text" id="demoSymbol" value="TSLA" class="w-full bg-dark/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none transition-colors">
+            </div>
+            <div class="flex-[2] min-w-[200px]">
+              <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Entry Rules</label>
+              <select id="demoRules" class="w-full bg-dark/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none transition-colors">
+                <option value="rsi">Buy RSI < 35, Sell RSI > 68</option>
+                <option value="ema,rsi">EMA9 > EMA21 + RSI < 35</option>
+                <option value="macd">MACD Histogram Crosses Above 0</option>
+              </select>
+            </div>
+            <div class="flex-1 min-w-[100px]">
+              <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Stop Loss %</label>
+              <input type="number" id="demoSL" value="2.0" class="w-full bg-dark/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none transition-colors">
+            </div>
+            <div class="flex-1 min-w-[100px]">
+              <label class="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Take Profit %</label>
+              <input type="number" id="demoTP" value="5.0" class="w-full bg-dark/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-primary outline-none transition-colors">
+            </div>
+            <button onclick="runStrategyDemo()" class="bg-primary hover:bg-blue-600 shadow-lg shadow-primary/30 text-white text-sm font-bold px-6 py-2 rounded-lg transition-all h-[38px]">
+              Run Simulation
+            </button>
           </div>
-          <iframe src="http://127.0.0.1:1880/ui" class="w-full" style="height:340px;border:none;"
-            onerror="this.style.display='none'" id="noderedFrame"></iframe>
-          <div class="px-4 py-3 text-xs text-gray-500">
-            If Node-RED panel is blank: run <span class="mono bg-dark px-1 py-0.5 rounded">npx node-red --userDir ./.nodered</span> then refresh.
+          
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="glass-panel bg-dark/30 p-5 flex flex-col justify-center border-white/5">
+              <div class="grid grid-cols-2 gap-y-4">
+                <div><div class="text-[11px] font-bold text-gray-500 uppercase">Trades Executed</div><div class="text-xl font-mono text-white mt-1" id="demoTotalTrades">—</div></div>
+                <div><div class="text-[11px] font-bold text-gray-500 uppercase">Win Rate</div><div class="text-xl font-mono text-white mt-1" id="demoWinRate">—</div></div>
+                <div class="col-span-2"><div class="text-[11px] font-bold text-gray-500 uppercase">Simulated P&L</div><div class="text-3xl font-mono text-white mt-1" id="demoTotalPnl">—</div></div>
+              </div>
+            </div>
+            <div class="lg:col-span-2 glass-panel bg-dark/30 p-0 border-white/5 flex flex-col h-64">
+              <div class="px-4 py-3 border-b border-white/5 text-[11px] font-bold text-gray-500 uppercase tracking-wider bg-white/5">Execution Log</div>
+              <div id="botExecutions" class="flex-1 overflow-y-auto p-2">
+                <div class="h-full flex items-center justify-center text-sm text-gray-600">Run a simulation to view trades</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+    </div>
 
-    </div><!-- /panel-container -->
+    <!-- 4. PORTFOLIO PANEL -->
+    <div id="panel-portfolio" class="absolute inset-0 p-6 overflow-y-auto hidden z-20 bg-[#0a0e17]">
+      <div class="max-w-5xl mx-auto">
+        <h1 class="text-2xl font-black text-white tracking-tight mb-6">Paper Trading Portfolio</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div class="glass-panel p-5 lg:p-6 bg-gradient-to-br from-white/5 to-transparent overflow-hidden flex flex-col justify-center">
+            <div class="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 lg:mb-2 truncate">Available Cash</div>
+            <div class="text-xl md:text-2xl lg:text-3xl font-mono font-bold text-white truncate" id="p-balance" title="Available Cash">—</div>
+          </div>
+          <div class="glass-panel p-5 lg:p-6 overflow-hidden flex flex-col justify-center">
+            <div class="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1 lg:mb-2 truncate">Total Holdings Value</div>
+            <div class="text-xl md:text-2xl lg:text-3xl font-mono font-bold text-white truncate" id="p-holdings" title="Total Holdings">—</div>
+          </div>
+          <div class="glass-panel p-5 lg:p-6 bg-gradient-to-br from-primary/10 to-transparent border-primary/20 overflow-hidden flex flex-col justify-center">
+            <div class="text-[10px] lg:text-[11px] font-bold text-primary uppercase tracking-wider mb-1 lg:mb-2 truncate">Net Profit / Loss</div>
+            <div class="text-xl md:text-2xl lg:text-3xl font-mono font-bold text-white truncate" id="p-pnl" title="Net PnL">—</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div class="glass-panel overflow-hidden border-white/5 flex flex-col">
+            <div class="px-5 py-4 border-b border-white/5 bg-white/5 text-xs font-bold text-gray-400 uppercase tracking-wider">Active Holdings</div>
+            <div id="holdingsTable" class="flex-1 overflow-y-auto"></div>
+          </div>
+          <div class="glass-panel overflow-hidden border-white/5 flex flex-col h-[500px]">
+            <div class="px-5 py-4 border-b border-white/5 bg-white/5 text-xs font-bold text-gray-400 uppercase tracking-wider">Recent Trades</div>
+            <div id="tradeHistory" class="flex-1 overflow-y-auto"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. FATIGUE DIAGNOSTICS PANEL (Node-RED Integration) -->
+    <div id="panel-iot" class="absolute inset-0 p-6 hidden z-20 bg-[#0a0e17] flex-col">
+      <div class="max-w-6xl mx-auto w-full h-full flex flex-col">
+        <div class="flex items-center justify-between mb-6 shrink-0">
+          <div>
+            <h1 class="text-2xl font-black text-white tracking-tight">Fatigue Diagnostics (Node-RED)</h1>
+            <p class="text-gray-400 text-sm">Real-time IoT telemetry and strategy monitoring via Node-RED.</p>
+          </div>
+          <div class="flex items-center gap-2 bg-accent/10 px-4 py-2 rounded-xl border border-accent/20">
+            <div class="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
+            <span class="text-xs font-bold text-accent uppercase tracking-wider">IoT Bridge Live</span>
+          </div>
+        </div>
+        
+        <div class="flex-1 w-full glass-panel overflow-hidden border border-white/10 relative rounded-2xl shadow-2xl">
+          <!-- We use an iframe to embed the Node-RED dashboard (default port 1880) -->
+          <iframe src="http://127.0.0.1:1880/ui" class="w-full h-full border-0 absolute inset-0 bg-[#0a0e17]" title="Node-RED Dashboard"></iframe>
+        </div>
+      </div>
+    </div>
   </main>
 
-  <!-- RIGHT SIDEBAR -->
-  <aside class="w-56 panel border-l border-border shrink-0 overflow-y-auto flex flex-col">
-    <!-- Market Movers -->
-    <div class="p-3 border-b border-border">
-      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Market Movers</div>
-      <div class="text-xs font-semibold text-accent mb-1">▲ Gainers</div>
-      <div id="gainers" class="space-y-1 mb-3 text-xs"></div>
-      <div class="text-xs font-semibold text-danger mb-1">▼ Losers</div>
-      <div id="losers" class="space-y-1 text-xs"></div>
+  <!-- RIGHT SIDEBAR: MOVERS & ALERTS -->
+  <aside class="w-72 glass-header border-l border-border shrink-0 flex flex-col z-10 shadow-2xl">
+    <div class="p-4 border-b border-border">
+      <h3 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3">Market Movers</h3>
+      <div class="text-[10px] font-bold text-accent uppercase mb-1 bg-accent/10 inline-block px-2 py-0.5 rounded">Top Gainers</div>
+      <div id="gainers" class="mb-4"></div>
+      
+      <div class="text-[10px] font-bold text-danger uppercase mb-1 bg-danger/10 inline-block px-2 py-0.5 rounded">Top Losers</div>
+      <div id="losers"></div>
     </div>
-    <!-- Alerts -->
-    <div class="p-3 flex-1">
-      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Live Alerts</div>
-      <div id="alertsEl" class="space-y-2"></div>
+    
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <div class="p-4 pb-2 border-b border-white/5 bg-white/5 shadow-sm z-10">
+        <h3 class="text-[11px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+          <div class="w-2 h-2 bg-primary rounded-full animate-ping"></div>
+          Live Event Feed
+        </h3>
+      </div>
+      <div id="alertsEl" class="flex-1 overflow-y-auto p-4 bg-dark/30 flex flex-col justify-end space-y-2"></div>
     </div>
   </aside>
 
-</div><!-- /main layout -->
-</div><!-- /app-container -->
+</div> <!-- /main workspace flex -->
 
-<!-- TOAST -->
-<div id="toastContainer" class="fixed bottom-4 right-4 z-[9999] space-y-2"></div>
+<div id="toastContainer" class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

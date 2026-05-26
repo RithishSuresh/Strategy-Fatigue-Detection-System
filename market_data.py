@@ -1,187 +1,243 @@
 """
-market_data.py - Handles all real-time and historical market data fetching.
-Strategy: Binance for crypto history/price. Finnhub free /quote for US stock live price.
-YFinance for ALL history (non-crypto) and Indian/Forex/Index live price.
+market_data.py — Multi-source real market data engine.
+Priority: Binance (crypto) → yfinance → yahooquery
+Handles Indian .NS stocks, Crypto, Forex, US stocks.
 """
-import time
-import logging
-import requests
+import time, logging, threading, requests
 import pandas as pd
 import numpy as np
-import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
-FINNHUB_API_KEY = 'd7lqkl9r01qk7lvu1nc0d7lqkl9r01qk7lvu1ncg'
-FINNHUB_BASE = 'https://finnhub.io/api/v1'
+try:
+    import yfinance as yf
+    YFINANCE_OK = True
+except ImportError:
+    YFINANCE_OK = False
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+try:
+    from yahooquery import Ticker as YQTicker
+    YAHOOQUERY_OK = True
+except ImportError:
+    YAHOOQUERY_OK = False
 
-def _is_crypto(symbol: str) -> bool:
-    return '-USD' in symbol or '-USDT' in symbol
+_price_cache: dict = {}
+_hist_cache:  dict = {}
+_lock = threading.Lock()
+PRICE_TTL   = 5
+HISTORY_TTL = 120
 
-def _is_indian(symbol: str) -> bool:
-    return symbol.endswith('.NS') or symbol.endswith('.BO')
+STOCK_UNIVERSE = [
+    {'symbol':'AAPL',  'name':'Apple Inc.',               'type':'US'},
+    {'symbol':'TSLA',  'name':'Tesla Inc.',               'type':'US'},
+    {'symbol':'MSFT',  'name':'Microsoft Corp.',          'type':'US'},
+    {'symbol':'NVDA',  'name':'NVIDIA Corp.',             'type':'US'},
+    {'symbol':'AMZN',  'name':'Amazon.com',               'type':'US'},
+    {'symbol':'GOOGL', 'name':'Alphabet Inc.',            'type':'US'},
+    {'symbol':'META',  'name':'Meta Platforms',           'type':'US'},
+    {'symbol':'AMD',   'name':'Advanced Micro Devices',   'type':'US'},
+    {'symbol':'NFLX',  'name':'Netflix Inc.',             'type':'US'},
+    {'symbol':'JPM',   'name':'JPMorgan Chase',           'type':'US'},
+    {'symbol':'V',     'name':'Visa Inc.',                'type':'US'},
+    {'symbol':'UBER',  'name':'Uber Technologies',        'type':'US'},
+    {'symbol':'COIN',  'name':'Coinbase Global',          'type':'US'},
+    {'symbol':'PLTR',  'name':'Palantir Technologies',    'type':'US'},
+    {'symbol':'BAC',   'name':'Bank of America',          'type':'US'},
+    {'symbol':'BTC-USD',  'name':'Bitcoin',    'type':'Crypto'},
+    {'symbol':'ETH-USD',  'name':'Ethereum',   'type':'Crypto'},
+    {'symbol':'SOL-USD',  'name':'Solana',     'type':'Crypto'},
+    {'symbol':'BNB-USD',  'name':'Binance Coin','type':'Crypto'},
+    {'symbol':'DOGE-USD', 'name':'Dogecoin',   'type':'Crypto'},
+    {'symbol':'XRP-USD',  'name':'XRP Ripple', 'type':'Crypto'},
+    {'symbol':'ADA-USD',  'name':'Cardano',    'type':'Crypto'},
+    {'symbol':'AVAX-USD', 'name':'Avalanche',  'type':'Crypto'},
+    {'symbol':'RELIANCE.NS',   'name':'Reliance Industries',       'type':'India'},
+    {'symbol':'TCS.NS',        'name':'Tata Consultancy Services', 'type':'India'},
+    {'symbol':'INFY.NS',       'name':'Infosys Ltd',               'type':'India'},
+    {'symbol':'HDFCBANK.NS',   'name':'HDFC Bank',                 'type':'India'},
+    {'symbol':'ICICIBANK.NS',  'name':'ICICI Bank',                'type':'India'},
+    {'symbol':'SBIN.NS',       'name':'State Bank of India',       'type':'India'},
+    {'symbol':'ITC.NS',        'name':'ITC Limited',               'type':'India'},
+    {'symbol':'WIPRO.NS',      'name':'Wipro Ltd',                 'type':'India'},
+    {'symbol':'LT.NS',         'name':'Larsen & Toubro',           'type':'India'},
+    {'symbol':'BAJFINANCE.NS', 'name':'Bajaj Finance',             'type':'India'},
+    {'symbol':'HCLTECH.NS',    'name':'HCL Technologies',          'type':'India'},
+    {'symbol':'AXISBANK.NS',   'name':'Axis Bank',                 'type':'India'},
+    {'symbol':'KOTAKBANK.NS',  'name':'Kotak Mahindra Bank',       'type':'India'},
+    {'symbol':'MARUTI.NS',     'name':'Maruti Suzuki',             'type':'India'},
+    {'symbol':'TITAN.NS',      'name':'Titan Company',             'type':'India'},
+    {'symbol':'ADANIENT.NS',   'name':'Adani Enterprises',         'type':'India'},
+    {'symbol':'SUNPHARMA.NS',  'name':'Sun Pharmaceutical',        'type':'India'},
+    {'symbol':'BHARTIARTL.NS', 'name':'Bharti Airtel',             'type':'India'},
+    {'symbol':'TATASTEEL.NS',  'name':'Tata Steel',                'type':'India'},
+    {'symbol':'^NSEI',  'name':'NIFTY 50',   'type':'Index'},
+    {'symbol':'^GSPC',  'name':'S&P 500',     'type':'Index'},
+    {'symbol':'^DJI',   'name':'Dow Jones',   'type':'Index'},
+    {'symbol':'^IXIC',  'name':'NASDAQ',      'type':'Index'},
+    {'symbol':'^BSESN', 'name':'BSE Sensex',  'type':'Index'},
+    {'symbol':'USDINR=X','name':'USD/INR',    'type':'Forex'},
+    {'symbol':'EURUSD=X','name':'EUR/USD',    'type':'Forex'},
+    {'symbol':'GBPUSD=X','name':'GBP/USD',    'type':'Forex'},
+    {'symbol':'USDJPY=X','name':'USD/JPY',    'type':'Forex'},
+]
 
-# ── Binance (crypto only) ────────────────────────────────────────────────────
+def _is_crypto(s): return '-USD' in s or '-USDT' in s
+def _is_indian(s): return s.endswith('.NS') or s.endswith('.BO')
+def _binance_sym(s): return s.replace('-USD','USDT').upper()
 
-def fetch_binance_history(symbol: str, limit: int = 100) -> pd.DataFrame | None:
-    if not _is_crypto(symbol):
+
+def fetch_live_price(symbol: str):
+    with _lock:
+        c = _price_cache.get(symbol)
+        if c and time.time() - c[0] < PRICE_TTL:
+            return c[1]
+
+    price = None
+
+    # Binance — fastest for crypto
+    if _is_crypto(symbol):
+        try:
+            bsym = _binance_sym(symbol)
+            r = requests.get(f"https://api.binance.com/api/v3/ticker/price?symbol={bsym}", timeout=3)
+            if r.status_code == 200:
+                price = float(r.json()['price'])
+        except Exception:
+            pass
+
+    # yfinance fast_info
+    if price is None and YFINANCE_OK:
+        try:
+            info = yf.Ticker(symbol).fast_info
+            v = getattr(info, 'last_price', None) or getattr(info, 'lastPrice', None)
+            if v and float(v) > 0:
+                price = float(v)
+        except Exception:
+            pass
+
+    # yahooquery fallback
+    if price is None and YAHOOQUERY_OK:
+        try:
+            t = YQTicker(symbol)
+            p = t.price
+            if isinstance(p, dict) and symbol in p:
+                pd_ = p[symbol]
+                if isinstance(pd_, dict):
+                    v = pd_.get('regularMarketPrice') or pd_.get('postMarketPrice')
+                    if v and float(v) > 0:
+                        price = float(v)
+        except Exception:
+            pass
+
+    if price and price > 0:
+        price = round(price, 6)
+        with _lock:
+            _price_cache[symbol] = (time.time(), price)
+    return price
+
+
+def fetch_history(symbol: str):
+    with _lock:
+        c = _hist_cache.get(symbol)
+        if c and time.time() - c[0] < HISTORY_TTL:
+            return c[1]
+
+    df = None
+
+    # Binance klines for crypto
+    if _is_crypto(symbol):
+        try:
+            bsym = _binance_sym(symbol)
+            r = requests.get(
+                f"https://api.binance.com/api/v3/klines?symbol={bsym}&interval=5m&limit=288",
+                timeout=8)
+            if r.status_code == 200:
+                cols = ['t','o','h','l','c','v','ct','qa','nt','tbv','tqv','i']
+                tmp = pd.DataFrame(r.json(), columns=cols)
+                tmp['t'] = pd.to_datetime(tmp['t'], unit='ms', utc=True)
+                tmp = tmp.set_index('t').rename(columns={'o':'open','h':'high','l':'low','c':'close','v':'volume'})
+                for col in ['open','high','low','close','volume']:
+                    tmp[col] = tmp[col].astype(float)
+                df = tmp[['open','high','low','close','volume']].dropna()
+                if df.empty: df = None
+        except Exception as e:
+            logger.debug(f"Binance {symbol}: {e}")
+
+    # yfinance — handles Indian .NS stocks very well
+    if df is None and YFINANCE_OK:
+        tk = yf.Ticker(symbol)
+        for per, ivl in [('1d','1m'), ('5d','5m'), ('1mo','30m')]:
+            try:
+                hist = tk.history(period=per, interval=ivl)
+                if hist is None or hist.empty or len(hist) < 20:
+                    continue
+                hist.columns = [c.lower() for c in hist.columns]
+                hist.index = pd.to_datetime(hist.index, utc=True)
+                needed = ['open','high','low','close','volume']
+                if all(c in hist.columns for c in needed):
+                    tmp_df = hist[needed].dropna()
+                    if len(tmp_df) >= 20:
+                        df = tmp_df
+                        break
+            except Exception as e:
+                logger.debug(f"yfinance {symbol} {per}/{ivl}: {e}")
+
+    # yahooquery fallback
+    if df is None and YAHOOQUERY_OK:
+        try:
+            t = YQTicker(symbol)
+            for per, ivl in [('1d','1m'), ('5d','5m')]:
+                try:
+                    hist = t.history(period=per, interval=ivl)
+                    if hist is None or isinstance(hist, str) or hist.empty:
+                        continue
+                    hist = hist.reset_index()
+                    for col in ['date','Datetime','timestamp']:
+                        if col in hist.columns:
+                            hist = hist.rename(columns={col:'time'}); break
+                    hist['time'] = pd.to_datetime(hist['time'], utc=True)
+                    hist = hist.set_index('time')
+                    hist.columns = [c.lower() for c in hist.columns]
+                    needed = ['open','high','low','close','volume']
+                    if all(c in hist.columns for c in needed):
+                        tmp_df = hist[needed].dropna()
+                        if len(tmp_df) >= 20:
+                            df = tmp_df; break
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning(f"yahooquery {symbol}: {e}")
+
+    if df is None or df.empty or len(df) < 10:
+        logger.warning(f"No history for {symbol}")
         return None
-    try:
-        bsym = symbol.replace('-USD', 'USDT').upper()
-        res = requests.get(
-            f"https://api.binance.com/api/v3/klines?symbol={bsym}&interval=1m&limit={limit}",
-            timeout=5)
-        if res.status_code != 200:
-            return None
-        data = res.json()
-        cols = ['time','open','high','low','close','volume','ct','qa','nt','tbv','tqv','i']
-        df = pd.DataFrame(data, columns=cols)
-        df['time'] = pd.to_datetime(df['time'], unit='ms', utc=True)
-        df.set_index('time', inplace=True)
-        for c in ['open','high','low','close','volume']:
-            df[c] = df[c].astype(float)
-        return df[['open','high','low','close','volume']]
-    except Exception as e:
-        logger.error(f"Binance history error {symbol}: {e}")
-        return None
 
-
-def fetch_binance_price(symbol: str) -> float | None:
-    if not _is_crypto(symbol):
-        return None
-    try:
-        bsym = symbol.replace('-USD', 'USDT').upper()
-        res = requests.get(
-            f"https://api.binance.com/api/v3/ticker/price?symbol={bsym}", timeout=3)
-        if res.status_code == 200:
-            return round(float(res.json()['price']), 4)
-    except:
-        pass
-    return None
-
-
-# ── Finnhub — FREE PLAN ONLY SUPPORTS /quote (live price), NOT /stock/candle ─
-
-def fetch_finnhub_price(symbol: str) -> float | None:
-    """Live quote from Finnhub. Only for US stocks on free plan."""
-    if _is_crypto(symbol) or _is_indian(symbol) or symbol.startswith('^') or '=X' in symbol:
-        return None
-    try:
-        res = requests.get(f"{FINNHUB_BASE}/quote",
-                           params={'symbol': symbol.upper(), 'token': FINNHUB_API_KEY},
-                           timeout=4)
-        if res.status_code == 200:
-            d = res.json()
-            if d.get('c') and float(d['c']) > 0:
-                return round(float(d['c']), 4)
-    except Exception as e:
-        logger.debug(f"Finnhub price error {symbol}: {e}")
-    return None
-
-
-# ── YFinance (history for all non-crypto; price fallback) ────────────────────
-
-_history_cache: dict[str, tuple[float, pd.DataFrame]] = {}
-CACHE_TTL = 300  # 5 minutes
-
-
-def _make_synthetic_history(price: float, n: int = 100) -> pd.DataFrame:
-    """Generate synthetic OHLCV data around a live price when real data is unavailable."""
-    import numpy as np
-    now = pd.Timestamp.utcnow().floor('min')
-    times = pd.date_range(end=now, periods=n, freq='1min', tz='UTC')
-    prices = [price]
-    for _ in range(n - 1):
-        prices.insert(0, prices[0] * (1 + np.random.normal(0, 0.001)))
-    closes = np.array(prices)
-    highs = closes * (1 + np.abs(np.random.normal(0, 0.0005, n)))
-    lows  = closes * (1 - np.abs(np.random.normal(0, 0.0005, n)))
-    opens = np.roll(closes, 1); opens[0] = closes[0]
-    vols  = np.random.randint(100, 10000, n).astype(float)
-    df = pd.DataFrame({'open': opens, 'high': highs, 'low': lows, 'close': closes, 'volume': vols}, index=times)
+    with _lock:
+        _hist_cache[symbol] = (time.time(), df)
+    logger.info(f"History: {symbol} — {len(df)} bars")
     return df
 
 
-def fetch_yfinance_history(symbol: str) -> pd.DataFrame | None:
-    now = time.time()
-    if symbol in _history_cache:
-        ts, df = _history_cache[symbol]
-        if now - ts < CACHE_TTL:
-            return df
+def search_symbols(query: str):
+    q = query.upper().strip()
+    if not q: return []
+    
     try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(period='1d', interval='1m')
-        if df is None or df.empty:
-            raise ValueError('empty')
-        df.columns = [c.lower() for c in df.columns]
-        if isinstance(df.index, pd.DatetimeTZInfo if hasattr(pd, 'DatetimeTZInfo') else type(None)):
-            df.index = df.index
-        df.index = pd.to_datetime(df.index, utc=True)
-        df = df[['open', 'high', 'low', 'close', 'volume']].dropna()
-        _history_cache[symbol] = (now, df)
-        return df
+        res = requests.get(f"https://query2.finance.yahoo.com/v1/finance/search?q={q}&quotesCount=10", timeout=3, headers={'User-Agent': 'Mozilla/5.0'})
+        if res.status_code == 200:
+            data = res.json().get('quotes', [])
+            results = []
+            for item in data:
+                sym = item.get('symbol')
+                name = item.get('shortname') or item.get('longname') or sym
+                type_disp = item.get('quoteType', 'Stock')
+                if sym and name:
+                    results.append({'symbol': sym, 'name': name, 'type': type_disp})
+            if results: return results
     except Exception as e:
-        logger.warning(f"YFinance history failed for {symbol}: {e}")
-        # Fallback: try to get a live price and generate synthetic history
-        price = fetch_finnhub_price(symbol)
-        if price:
-            logger.info(f"Using synthetic history for {symbol} @ {price}")
-            df = _make_synthetic_history(price)
-            _history_cache[symbol] = (now, df)
-            return df
-        return None
-
-
-def fetch_yfinance_price(symbol: str) -> float | None:
-    try:
-        info = yf.Ticker(symbol).fast_info
-        price = getattr(info, 'last_price', None) or getattr(info, 'lastPrice', None)
-        if price and float(price) > 0:
-            return round(float(price), 4)
-    except:
-        pass
-    return None
-
-
-# ── Public API ───────────────────────────────────────────────────────────────
-
-def fetch_history(symbol: str) -> pd.DataFrame | None:
-    df = fetch_binance_history(symbol)
-    if df is not None and not df.empty:
-        return df
-    return fetch_yfinance_history(symbol)
-
-
-def fetch_live_price(symbol: str) -> float | None:
-    p = fetch_binance_price(symbol)
-    if p: return p
-    p = fetch_finnhub_price(symbol)
-    if p: return p
-    return fetch_yfinance_price(symbol)
-
-
-def validate_symbol(symbol: str) -> bool:
-    p = fetch_live_price(symbol.upper())
-    return p is not None and p > 0
-
-
-# ── Market Movers ────────────────────────────────────────────────────────────
-
-TOP_SYMBOLS = ['AAPL','TSLA','MSFT','NVDA','AMD','META','NFLX','AMZN','GOOGL','ORCL']
-
-def fetch_market_movers() -> dict:
-    gainers = []
-    for sym in TOP_SYMBOLS:
-        try:
-            res = requests.get(f"{FINNHUB_BASE}/quote",
-                               params={'symbol': sym, 'token': FINNHUB_API_KEY}, timeout=4)
-            if res.status_code == 200:
-                d = res.json()
-                if d.get('c') and d.get('dp') is not None:
-                    gainers.append({'symbol': sym, 'price': round(d['c'], 2), 'change': round(d['dp'], 2)})
-        except:
-            pass
-    gainers.sort(key=lambda x: x['change'], reverse=True)
-    return {'gainers': gainers[:5], 'losers': sorted(gainers, key=lambda x: x['change'])[:5]}
+        logger.debug(f"Search error: {e}")
+        
+    return [
+        {'symbol': s['symbol'], 'name': s['name'], 'type': s.get('type','Stock')}
+        for s in STOCK_UNIVERSE
+        if q in s['symbol'].upper() or q in s['name'].upper()
+    ][:15]
